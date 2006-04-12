@@ -1,0 +1,8 @@
+--- #YAML:1.0
+name: Test-Dist1
+version: 1.00
+author:
+  - Matt Lawrence <mattlaw@cpan.org>
+abstract: Test distribution for Module::Mask::Deps
+license: perl
+generated_by: Module::Build version 0.2611, without YAML.pm
