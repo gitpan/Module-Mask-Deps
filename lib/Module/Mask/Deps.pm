@@ -3,7 +3,7 @@ package Module::Mask::Deps;
 use strict;
 use warnings;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 =head1 NAME
 
@@ -147,6 +147,14 @@ Typically, in a testing environment, local paths are unshifted into @INC by
 blib.pm, lib.pm or command-line switches. We don't want the mask to affect those
 paths.
 
+Also, relative paths passed to require will not be masked.
+
+    # Will check @INC but won't be masked
+    require 't/my_script.pl';
+
+    # Won't even check @INC
+    require './t/my_script.pl';
+
 =cut
 
 sub set_mask {
@@ -158,14 +166,11 @@ sub set_mask {
     # count how many relative paths follow the mask object
     my $count = 0;
     for my $entry (@INC[1 .. $#INC]) {
-        if (
-            file_name_is_absolute($entry) and 
-            (splitdir(abs2rel($entry)))[0] eq updir
-        ) {
-            last;
+        if ($self->_rel_path($entry)) {
+            $count++;
         }
         else {
-            $count++;
+            last;
         }
     }
 
@@ -173,6 +178,13 @@ sub set_mask {
     unshift @INC, splice @INC, 1, $count;
 
     return $self;
+}
+
+sub _rel_path {
+    my ($self, $entry) = @_;
+    
+    return !file_name_is_absolute($entry)
+        || (splitdir(abs2rel($entry)))[0] ne updir
 }
 
 # prevent sub-dependencies from being masked
@@ -187,6 +199,12 @@ sub Module::Mask::Deps::INC {
         # also add this module to the whitelist
         $self->mask_modules($module);
 
+        return;
+    }
+    elsif (-f $module) {
+        # $module must be a local, relative path.
+        # Absolute paths don't check @INC
+        # It will be loaded as long as . is in @INC
         return;
     }
     else {
@@ -272,18 +290,19 @@ sub _get_builder_deps {
 
 =head3 ExtUtils::MakeMaker
 
-If Makefile.PL exists, dependencies are obtained by running C<perl Makefile.PL PREREQ_PRINT=1>.
+If Makefile.PL exists, dependencies are obtained by running C<perl Makefile.PL
+PREREQ_PRINT=1>.
 
 The current perl version ($]) is always used to determine core modules.
 
 =cut
 
 # get dependencies from ExtUtils::MakeMaker
-# return on error, since we might have other _get_*_deps methods to try..
 sub _get_makefile_deps {
     my $class = shift;
     my @deps;
 
+    # return on error, since we might have other _get_*_deps methods to try..
     return unless -f 'Makefile.PL';
 
     my @cmd = ($^X, 'Makefile.PL', 'PREREQ_PRINT=1');

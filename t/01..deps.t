@@ -5,7 +5,7 @@ use Cwd qw( chdir cwd );
 use File::Spec::Functions qw( catdir rel2abs );
 use IPC::Open3;
 
-use Test::More tests => 22;
+use Test::More tests => 23;
 
 use lib catdir qw( t lib );
 
@@ -106,9 +106,16 @@ ok($dep_lookup{'Foo'}, 'picked up known dependency');
 ok($dep_lookup{'English'}, 'picked up known core module');
 
 {
+    # simulate -I lib 
     local @INC = (catdir('lib'), @INC);
+
+    # don't remember what we load
     local %INC = %INC;
     local $Module::Mask::Deps::Mask;
+
+    # we should allow relative paths to be loaded
+    eval { require 'test.pl'};
+    ok(!$@, 'test.pl loaded OK') or diag $@;
 
     eval { import Module::Mask::Deps };
     ok(!$@, 'import Module::Mask::Deps on a valid distribution works');

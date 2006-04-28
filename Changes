@@ -1,0 +1,9 @@
+Changelog for Module::Mask::Deps
+
+0.02 - next version
+	- Made provision for loading local paths
+	- Added Changes and README
+
+0.01 - Wed Apr 12 2006
+	- initial revision
+
