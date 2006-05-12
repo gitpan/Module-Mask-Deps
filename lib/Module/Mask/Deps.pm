@@ -3,7 +3,7 @@ package Module::Mask::Deps;
 use strict;
 use warnings;
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 =head1 NAME
 
@@ -163,6 +163,12 @@ sub set_mask {
     $self->SUPER::set_mask();
     # now the mask should be at the start of @INC
 
+    # This is less code, but it's not as clear.
+    # Might even be less efficient.
+    # for (my $i = 1; $self->_rel_path($INC[$i]); $i++) {
+        # unshift @INC, splice @INC, $i, 1;
+    # }
+
     # count how many relative paths follow the mask object
     my $count = 0;
     for my $entry (@INC[1 .. $#INC]) {
@@ -191,25 +197,43 @@ sub _rel_path {
 sub Module::Mask::Deps::INC {
     my ($self, $module) = @_;
 
-    my $call_pack = caller;
-    if ($self->is_masked($module) and $self->_is_listed($call_pack)) {
-        # we've explicitly whitelisted the calling package,
-        # don't mask its dependencies
+    if ($self->is_masked($module)) {
+        my ($call_pack, $call_file) = caller;
 
-        # also add this module to the whitelist
-        $self->mask_modules($module);
+        if ($self->_is_listed($call_pack)) {
+            # we've explicitly whitelisted the calling package,
+            # don't mask its dependencies
 
-        return;
+            # also add this module to the whitelist
+            $self->mask_modules($module);
+
+            return;
+        }
+        elsif (-f $module) {
+            # $module must be a local, relative path.
+            # Absolute paths don't check @INC
+            # It will be loaded as long as . is in @INC
+            return;
+        }
+        else {
+            # Maybe we're being called from a package defined inside a module
+            # file 
+            my %inc_lookup = reverse %INC;
+
+            # This won't work unless the module is loaded from the filesystem
+            my $call_mod = $inc_lookup{$call_file};
+
+            if ($call_mod and $self->_is_listed($call_mod)) {
+                # Add the sub-package to the whitelist so we don't need to
+                # re-check next time
+                $self->mask_modules($call_pack);
+
+                return;
+            }
+        }
     }
-    elsif (-f $module) {
-        # $module must be a local, relative path.
-        # Absolute paths don't check @INC
-        # It will be loaded as long as . is in @INC
-        return;
-    }
-    else {
-        return $self->SUPER::INC($module);
-    }
+
+    return $self->SUPER::INC($module);
 }
 
 =head2 get_deps

@@ -11,4 +11,11 @@ use Bar;
 
 our $VERSION = '1.00';
 
+package Foo::OtherPackage;
+
+# another sub-dependency in an alternative package
+use Baz;
+
+1;
+
 __END__

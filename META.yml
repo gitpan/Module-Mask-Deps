@@ -1,6 +1,6 @@
 ---
 name: Module-Mask-Deps
-version: 0.02
+version: 0.03
 author:
   - 'Matt Lawrence <mattlaw@cpan.org>'
 abstract: Mask modules not listed as dependencies
@@ -18,5 +18,5 @@ build_requires:
 provides:
   Module::Mask::Deps:
     file: lib/Module/Mask/Deps.pm
-    version: 0.02
+    version: 0.03
 generated_by: Module::Build version 0.2611
