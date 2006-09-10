@@ -4,7 +4,7 @@ use warnings;
 use Cwd qw( chdir cwd );
 use File::Temp qw( tempdir );
 
-use Test::More tests => 5;
+use Test::More tests => 4;
 
 require_ok('Module::Mask::Deps');
 
@@ -18,8 +18,8 @@ like(
     'new fails with no Build.PL or Makefile.PL'
 );
 
+# Create empty Makefile.PL
 open my $makefile, '>', 'Makefile.PL' or die "Can't write Makefile.PL";
-# print $makefile "print \"Eval Me\\n\";\n";
 close $makefile;
 
 {
@@ -35,10 +35,6 @@ close $makefile;
     like(
         $@, qr(Couldn't find dependencies),
         'new fails when $^X can\'t be run'
-    );
-    like(
-        $@, qr(Couldn't run invalid command),
-        '.. meaningful error generated'
     );
 }
 

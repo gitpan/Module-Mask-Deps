@@ -17,7 +17,7 @@ my $builder = Module::Build->new(
     },
     build_requires => {
         'Test::More' => 0,
-        'File::Find::Rule' => 0,
+        # 'File::Find::Rule' => 0,
     },
     recommends => {
         'Test::Pod' => '1.14',

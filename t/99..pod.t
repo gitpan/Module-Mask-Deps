@@ -3,9 +3,9 @@ use warnings;
 
 use Module::Util qw( find_installed find_in_namespace );
 
-BEGIN { our @modules = find_in_namespace('', 'lib') }
-
-use Test::More tests => our @modules * 2;
+use Test::More;
+our @modules = find_in_namespace('', File::Spec->rel2abs('lib'));
+plan tests => @modules * 2;
 
 SKIP: {
     eval {
@@ -13,7 +13,7 @@ SKIP: {
         import Test::Pod;
     };
 
-    skip "Test::Pod not installed", scalar our @modules if $@;
+    skip "Test::Pod not installed", scalar @modules if $@;
 
     for my $module (@modules) {
         my $file = find_installed($module, 'lib');
@@ -28,7 +28,7 @@ SKIP: {
         import Test::Pod::Coverage;
     };
 
-    skip "Test::Pod::Coverage not installed", scalar our @modules if $@;
+    skip "Test::Pod::Coverage not installed", scalar @modules if $@;
 
     for my $module (@modules) {
         pod_coverage_ok(

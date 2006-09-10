@@ -20,4 +20,5 @@ t/data/Test-Dist2/lib/Test/Dist2.pm
 t/data/Test-Dist2/Makefile.PL
 t/lib/Bar.pm
 t/lib/Baz.pm
+t/lib/Baz/Qux.pm
 t/lib/Foo.pm

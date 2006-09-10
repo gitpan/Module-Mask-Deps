@@ -3,7 +3,7 @@ package Module::Mask::Deps;
 use strict;
 use warnings;
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 =head1 NAME
 
@@ -226,7 +226,7 @@ sub Module::Mask::Deps::INC {
             if ($call_mod and $self->_is_listed($call_mod)) {
                 # Add the sub-package to the whitelist so we don't need to
                 # re-check next time
-                $self->mask_modules($call_pack);
+                $self->mask_modules($call_pack, $module);
 
                 return;
             }
@@ -331,12 +331,7 @@ sub _get_makefile_deps {
 
     my @cmd = ($^X, 'Makefile.PL', 'PREREQ_PRINT=1');
     local $" = ' ';
-
-    open my $make, '-|', @cmd or die "Couldn't run @cmd: $!";
-
-    local $/;
-    my $code = <$make>;
-    close $make;
+    my $code = qx( @cmd );
 
     if ($code =~ /^ \$PREREQ_PM \s* = \s* {/x) {
         # Let's not eval arbitrary code...
@@ -424,6 +419,18 @@ sub _clean_version {
 1;
 
 __END__
+
+=head1 BUGS
+
+Like Module::Mask, already loaded modules cannot be masked. This means that
+dependencies of Module::Mask::Deps can never be masked.
+
+Notably, Module::Mask, Module::Util and Module::CoreList fall into this
+category.
+
+To see a full list of modules for which this applies, run:
+
+    perl -le 'require Module::Mask::Deps; print for keys %INC'
 
 =head1 DIAGNOSTICS
 
