@@ -1,6 +1,9 @@
 Changelog for Module::Mask::Deps
 
-0.04 - Next version
+0.05 - Wed Oct 4 2006
+        - Stopped POD tests from relying on File::Find::Rule.
+
+0.04 - Wed Oct 4 2006
 	- Avoided pipe open when reading Makefile.PL dependencies, as this is
 	  not well supported on windows. (RT bug 20779)
 

@@ -1,10 +1,10 @@
 use strict;
 use warnings;
 
-use Module::Util qw( find_installed find_in_namespace );
+use Module::Util qw( find_installed );
 
 use Test::More;
-our @modules = find_in_namespace('', File::Spec->rel2abs('lib'));
+our @modules = qw( Module::Mask::Deps );
 plan tests => @modules * 2;
 
 SKIP: {
