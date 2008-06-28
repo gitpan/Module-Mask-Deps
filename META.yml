@@ -1,6 +1,6 @@
 ---
 name: Module-Mask-Deps
-version: 0.05
+version: 0.06
 author:
   - 'Matt Lawrence <mattlaw@cpan.org>'
 abstract: Mask modules not listed as dependencies
@@ -10,7 +10,7 @@ resources:
 requires:
   Module::CoreList: 1.01
   Module::Mask: 0
-  perl: 5.8
+  perl: 5.8.0
 build_requires:
   Test::More: 0
 recommends:
@@ -19,8 +19,8 @@ recommends:
 provides:
   Module::Mask::Deps:
     file: lib/Module/Mask/Deps.pm
-    version: 0.05
-generated_by: Module::Build version 0.28
+    version: 0.06
+generated_by: Module::Build version 0.2808
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.2.html
   version: 1.2

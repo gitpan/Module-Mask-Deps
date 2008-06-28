@@ -1,5 +1,8 @@
 Changelog for Module::Mask::Deps
 
+0.06 - Sat 28 Jun 2008
+	- Fixed required perl version.
+
 0.05 - Wed Oct 4 2006
         - Stopped POD tests from relying on File::Find::Rule.
 

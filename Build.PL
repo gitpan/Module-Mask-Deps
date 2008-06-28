@@ -11,7 +11,7 @@ my $builder = Module::Build->new(
     create_makefile_pl  => 'passthrough',
 
     requires => {
-        'perl' => '5.8',
+        'perl' => '5.8.0',
         'Module::Mask' => 0,
         'Module::CoreList' => '1.01',
     },
