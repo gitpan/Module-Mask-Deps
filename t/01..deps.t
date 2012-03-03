@@ -1,11 +1,11 @@
 use strict;
 use warnings;
 
-use Cwd qw( chdir cwd );
+use Cwd qw( cwd );
 use File::Spec::Functions qw( catdir rel2abs );
 use IPC::Open3;
 
-use Test::More tests => 23;
+use Test::More tests => 19;
 
 use lib catdir qw( t lib );
 
@@ -19,7 +19,7 @@ local $SIG{__WARN__} = sub { push @warnings, @_ };
 {
     local %INC = %INC;
     eval { require Foo };
-    ok(!$@, 'relative lib not affected by mask');
+    ok(!$@, 'relative lib not affected by mask') or diag $@;
 }
 
 # Turn off masking now
@@ -62,37 +62,7 @@ chdir $dist_dir or die "Can't change to $dist_dir";
     local $Module::Mask::Deps::Mask;
 
     eval { import Module::Mask::Deps };
-    like(
-        $@, qr(Couldn't find dependencies),
-        "Can't find dependencies before running Build.PL"
-    );
-}
-
-{
-    # make sure we don't get a missing prerequisite warning
-    local $ENV{'PERL5LIB'} = $test_lib;
-
-    my @deps = eval { Module::Mask::Deps->_get_makefile_deps() };
-
-    ok($@, '_get_makefile_deps on invalid Makefile.PL dies');
-
-    # clean up the generated makefile and Build script
-    eval {
-        unlink 'Makefile';
-        do_realclean();
-    };
-    ok(!$@, 'cleaning up') or diag $@;
-}
-
-{
-    my @errors;
-    open3(*PERL_IN, *PERL_OUT, *PERL_ERR, $^X, '-I', $test_lib, 'Build.PL');
-    close PERL_IN;
-    close PERL_OUT;
-    @errors = <PERL_ERR>;
-    close PERL_ERR;
-
-    ok(!@errors, 'No errors running Build.PL') or diag @errors;
+    ok !$@, 'Masked deps for Test-Dist1' or diag $@;
 }
 
 @deps = Module::Mask::Deps->get_deps();
@@ -100,7 +70,8 @@ ok(@deps, "Got deps from $dist_dir");
 
 %dep_lookup = map { $_ => 1 } @deps;
 
-ok($dep_lookup{'Foo'}, 'picked up known dependency');
+ok($dep_lookup{'Foo'}, 'picked up known dependency')
+    or diag "Deps: ", map "$_\n", sort @deps;
 
 # English has been core since perl 5
 ok($dep_lookup{'English'}, 'picked up known core module');
@@ -128,9 +99,6 @@ ok($dep_lookup{'English'}, 'picked up known core module');
     delete $INC{'Module/Mask.pm'};
     eval { require Module::Mask };
     ok($@, 'Module::Mask is masked');
-
-    eval { do_realclean() };
-    ok(!$@, 'cleaning up') or diag $@;
 }
 
 $dist_dir = catdir qw( t data Test-Dist2 );
@@ -160,21 +128,7 @@ ok($dep_lookup{'English'}, 'picked up known core module');
     ok(!$@, 'valid distribution loads OK') or diag $@;
 }
 
-# Go back home
-chdir $root;
-
 ok(!@warnings, 'no warnings generated') or diag join("\n", @warnings);
-
-sub do_realclean {
-    # clean up
-    local $SIG{__WARN__} = sub {}; # suppress warnings
-    my $temp;
-    open my $catch_print, '>', \$temp;
-    my $old = select $catch_print;
-    Module::Build->current->dispatch('realclean');
-    select $old;
-    close $catch_print;
-}
 
 __END__
 

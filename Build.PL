@@ -8,7 +8,7 @@ my $builder = Module::Build->new(
     license             => 'perl',
     dist_author         => 'Matt Lawrence <mattlaw@cpan.org>',
     add_to_cleanup      => [ 'Module-Mask-Deps-*' ],
-    create_makefile_pl  => 'passthrough',
+    create_makefile_pl  => 'small',
 
     requires => {
         'perl' => '5.8.0',

@@ -3,7 +3,7 @@ package Module::Mask::Deps;
 use strict;
 use warnings;
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 =head1 NAME
 
@@ -11,10 +11,11 @@ Module::Mask::Deps - Mask modules not listed as dependencies
 
 =head1 SYNOPSIS
 
-Cause your test suite to blow up if you require a module not listed as a requirement in Build.PL:
+Cause your test suite to blow up if you require a module not listed as a
+requirement in C<META.yml> or C<META.json>.
 
     perl Build.PL
-    PERL_HARNESS_SWITCHES=-MModule::Mask::Deps ./Build test
+    HARNESS_PERL_SWITCHES=-MModule::Mask::Deps ./Build test
 
 Or use directly in your testing code:
 
@@ -51,17 +52,18 @@ This module aims to help module developers keep track of their dependencies by
 only allowing modules to be loaded if they are in core or are listed as
 dependencies.
 
-It uses L<Module::CoreList> and either L<Module::Build> or
-L<ExtUtils::MakeMaker> to build its list of declared dependant modules.
-
-Under Module::Build, the core module collection for the declared minimum perl
-version is used instead of the current core list.
+It uses L<Module::CoreList> and L<Parse::CPAN::Meta> to build its list of
+declared dependant modules.
 
 =cut
 
 use Module::CoreList;
-
 use Module::Mask;
+use Parse::CPAN::Meta;
+
+# Need to load these early in case we mask them later
+use CPAN::Meta::YAML;
+use JSON::PP;
 
 use File::Spec::Functions qw(
     file_name_is_absolute
@@ -81,9 +83,9 @@ our @ISA = qw( Module::Mask::Inverted );
     import Module::Mask::Deps;
 
 Causes a L<Module::Mask::Deps> object to be created as
-$Module::Mask::Deps::Mask. This means that when called with C<use> the mask
-object is is in scope at compile time and therefore should affect all subsequent
-C<use> and C<require> statements in the program.
+C<$Module::Mask::Deps::Mask>. This means that when called with C<use> the mask
+object is is in scope at compile time and therefore should affect all
+subsequent C<use> and C<require> statements in the program.
 
 =cut
 
@@ -96,7 +98,7 @@ sub import {
         $Mask->set_mask;
     }
     else {
-        $Mask = new $class;
+        $Mask = $class->new;
     }
 }
 
@@ -106,16 +108,15 @@ sub import {
 
     no Module::Mask::Deps;
 
-Stops the mask from working until import is called again. See clear_mask in L<Module::Mask>
+Stops the mask from working until import is called again. See clear_mask in
+L<Module::Mask>
 
-Note that C<no Module::Mask::Deps> occurs at compile time and is not lexical int
-he same way as C<no strict> and <no warnings> are.
+Note that C<no Module::Mask::Deps> occurs at compile time and is not lexical
+in the same way as C<no strict> and <no warnings> are.
 
 =cut
 
 sub unimport {
-    my $class = shift;
-
     $Mask->clear_mask if $Mask;
 }
 
@@ -123,8 +124,8 @@ sub unimport {
 
     $obj = $class->new()
 
-Returns a new Module::Mask::Deps object. See L<Module::Mask> for details about
-how modules are masked.
+Returns a new C<Module::Mask::Deps> object. See L<Module::Mask> for details
+about how modules are masked.
 
 =cut
 
@@ -140,12 +141,12 @@ sub new {
 
     $obj = $obj->set_mask()
 
-Overloaded from Module::Mask to place the mask object after any relative paths
-at the beginning of @INC.
+Overloaded from L<Module::Mask> to place the mask object after any relative
+paths at the beginning of @INC.
 
 Typically, in a testing environment, local paths are unshifted into @INC by
-blib.pm, lib.pm or command-line switches. We don't want the mask to affect those
-paths.
+C<blib.pm>, C<lib.pm> or command-line switches. We don't want the mask to
+affect those paths.
 
 Also, relative paths passed to require will not be masked.
 
@@ -190,7 +191,7 @@ sub _rel_path {
     my ($self, $entry) = @_;
     
     return !file_name_is_absolute($entry)
-        || (splitdir(abs2rel($entry)))[0] ne updir
+        || (splitdir(abs2rel($entry)))[0] ne updir;
 }
 
 # prevent sub-dependencies from being masked
@@ -240,109 +241,66 @@ sub Module::Mask::Deps::INC {
 
     @deps = $class->get_deps()
 
-Returns current dependencies as defined in either Build.PL or Makefile.PL. This
-is used internally by import and new, so there's no need to call it directly.
+Returns current dependencies as defined in either C<META.json> or C<META.yml>,
+checked in that order.  This is used internally by import and new, so there's
+no need to call it directly.
 
-It returns all explicitly defined dependencies, plus all core dependencies.
+It returns all explicitly defined dependencies, plus all core dependencies for
+the appropriate version of Perl, i.e. either the minimum version specified in
+the meta file or the currently running version.
+
+The sections of the metadata checked for dependencies are:
+
+=over
+
+=item requires
+
+=item test_requires
+
+=item build_requires
+
+=back
 
 =cut
-
-# methods to try to get dependencies from
-# subclasses may want to add to this list to get their methods to be called get
-# get_deps
-our @dep_methods = qw(
-    _get_builder_deps
-    _get_makefile_deps
-);
 
 sub get_deps {
     my $class = shift;
 
-    for my $method (@dep_methods) {
-        my @deps = eval { $class->$method };
-        last if $@;
-        return @deps if @deps;
+    my @errors;
+
+    for my $file ($class->_meta_files) {
+        # Ignore errors reading the file
+        if (my $meta = eval { Parse::CPAN::Meta->load_file($file) }) {
+            my %deps = $class->_meta_reqs($meta);
+
+            my $perl_version = delete $deps{perl} || $];
+
+            return $class->_merge_core($perl_version, keys %deps);
+        }
+        elsif ($@) {
+            push @errors, $@;
+        }
     }
 
-    die "$class: Couldn't find dependencies\n", $@ ? "$@\n" : '';
+    local $" = "\n";
+    die "$class: Couldn't find dependencies\n@errors\n";
 }
 
-=head3 Module::Build
-
-If Build.PL exists, Module::Build->current is used to obtain a Module::Build
-object, and its C<requires> and C<build_requires> fields are used as
-dependencies.
-
-This means that the dependencies can only be picked up if Build.PL has already
-been run.
-
-If a particular perl version is specified as a dependency, then the list of core
-modules for that version of perl is used. 
-
-Note that modules in C<recommends> are not included.
-
-=cut
-
-# get dependencies from Module::Build
-# return nothing if this isn't a Module::Build distro, die if something goes
-# wrong.
-sub _get_builder_deps {
-    my $class = shift;
-
-    return unless -f 'Build.PL';
-
-    my $build = do {
-        require Module::Build;
-
-        # suppress warnings in current
-        local $SIG{__WARN__} = sub {};
-
-        current Module::Build;
-    };
-
-    # method names to call to get dependencies from a Module::Build object
-    my @dep_fields = qw( requires build_requires );
-
-    # copy and merge all deps.
-    my %deps = map { %{$build->$_} } @dep_fields;
-    
-    # find target perl version, if present.
-    my $perl_version = delete $deps{'perl'} || $];
-
-    return $class->_merge_core($perl_version, keys %deps);
+sub _meta_files {
+    return qw( META.json META.yml );
 }
 
-=head3 ExtUtils::MakeMaker
+# Extract requirements from metadata.
+# There are two formats for this, try all combinations and return as a hash
+sub _meta_reqs {
+    my ($class, $meta) = @_;
 
-If Makefile.PL exists, dependencies are obtained by running C<perl Makefile.PL
-PREREQ_PRINT=1>.
+    my @top_keys = grep /(?:_|^)requires$/, keys %$meta;
 
-The current perl version ($]) is always used to determine core modules.
-
-=cut
-
-# get dependencies from ExtUtils::MakeMaker
-sub _get_makefile_deps {
-    my $class = shift;
-    my @deps;
-
-    # return on error, since we might have other _get_*_deps methods to try..
-    return unless -f 'Makefile.PL';
-
-    my @cmd = ($^X, 'Makefile.PL', 'PREREQ_PRINT=1');
-    local $" = ' ';
-    my $code = qx( @cmd );
-
-    if ($code =~ /^ \$PREREQ_PM \s* = \s* {/x) {
-        # Let's not eval arbitrary code...
-        # We only need the names anyway
-        @deps = $code =~ /^\s+'([\w:]+)/mg;
-    }
-    else {
-        die "@cmd returned erroneous code\n";
-    }
-
-    return $class->_merge_core($], @deps);
+    return (
+        ( map %$_, @$meta{ @top_keys } ),
+        ( map %{ $_->{requires} }, values %{ $meta->{prereqs} || {} } ),
+    );
 }
 
 # convenience function to return unique deps for a given perl version and
@@ -368,9 +326,9 @@ sub _get_core {
     # Nothing found,
     # Maybe $perl_version needs reformatting..
 
-    my $clean = $class->_clean_version($perl_version);
-    
-    @core = $class->_core_for_version($clean);
+    if (my $clean = $class->_clean_version($perl_version)) {
+        @core = $class->_core_for_version($clean);
+    }
 
     return @core if @core;
 
@@ -384,6 +342,9 @@ sub _core_for_version {
     my $class = shift;
     my $perl_version = shift;
 
+use Carp qw( confess );
+    confess "undef perl version" unless defined $perl_version;
+
     if (exists $Module::CoreList::version{$perl_version}) {
         return keys %{$Module::CoreList::version{$perl_version}};
     }
@@ -395,7 +356,7 @@ sub _core_for_version {
 # try to transform perl version numbers into the type used in Module::CoreList
 sub _clean_version {
     my ($class, $version) = @_;
-
+    $version =~ tr/0-9._//dc;
     my ($major, @minors) = split(/[._]/, $version);
 
     # we don't want trailing zeros
@@ -420,13 +381,10 @@ sub _clean_version {
 
 __END__
 
-=head1 BUGS
+=head1 BUGS AND LIMITATIONS
 
 Like Module::Mask, already loaded modules cannot be masked. This means that
 dependencies of Module::Mask::Deps can never be masked.
-
-Notably, Module::Mask, Module::Util and Module::CoreList fall into this
-category.
 
 To see a full list of modules for which this applies, run:
 
@@ -446,11 +404,8 @@ The following fatal errors can occur:
 
 The class couldn't find dependencies for the current distribution.
 
-If you are using Module::Build, ensure that you have run Build.PL and generated
-a Build script.
-
-If you are using ExtUtils::MakeMaker, ensure that the current directory contains
-your Makefile.PL script.
+This may mean that C<META.yml> or C<META.json> do not (yet) exist. Running C<<
+make dist >> or C<< make distmeta >> (or equivalents) may fix this.
 
 Further information about the error might be provided on subsequent lines.
 
@@ -473,4 +428,3 @@ Matt Lawrence E<lt>mattlaw@cpan.orgE<gt>
 =cut
 
 vim: ts=8 sts=4 sw=4 sr et
-
